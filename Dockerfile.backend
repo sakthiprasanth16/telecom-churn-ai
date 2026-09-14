@@ -1,0 +1,40 @@
+# Dockerfile.backend
+# ------------------
+# Builds the FastAPI prediction/monitoring API as a standalone image.
+#
+# Build context is the REPO ROOT (not backend/), because backend/predictor.py,
+# backend/versioning.py, and ml/retraining_graph.py all resolve paths like
+# `Path(__file__).resolve().parent.parent / "models"` -- i.e. they assume
+# backend/, ml/, models/, and data/ are siblings on disk, exactly as they are
+# in the repo. Copying only the backend/ folder would break those lookups.
+#
+# Build from repo root:
+#   docker build -f Dockerfile.backend -t telecom-churn-backend .
+#
+# Run locally:
+#   docker run --rm -p 8000:8000 --env-file .env telecom-churn-backend
+
+FROM python:3.11-slim
+
+WORKDIR /app
+
+# Install backend dependencies first (better layer caching -- this layer is
+# only invalidated when backend/requirements.txt changes, not on every code edit).
+COPY backend/requirements.txt backend/requirements.txt
+RUN pip install --no-cache-dir -r backend/requirements.txt
+
+# Copy only what the API actually needs at runtime -- not notebooks/, tests/,
+# frontend/, or data/raw/, so the image stays small and doesn't ship the
+# original (pre-cleaning) dataset unnecessarily.
+COPY backend/ backend/
+COPY ml/ ml/
+COPY models/ models/
+COPY data/processed/ data/processed/
+
+# Render (and most PaaS providers) inject the actual listen port via $PORT
+# at runtime -- 8000 here is just the local-dev default via docker run.
+ENV PORT=8000
+EXPOSE 8000
+
+# Shell form so ${PORT} is expanded at container start, not at build time.
+CMD ["sh", "-c", "uvicorn backend.main:app --host 0.0.0.0 --port ${PORT}"]

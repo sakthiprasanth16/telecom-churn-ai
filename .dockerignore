@@ -1,0 +1,25 @@
+# Keeps the build context small and fast, and makes sure secrets/large
+# artifacts never accidentally end up inside an image layer.
+
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+
+.git/
+.gitignore
+
+.env
+.env.*
+!.env.example
+
+# Not needed inside either image -- Streamlit only calls the API over HTTP,
+# and the API doesn't need the notebooks, tests, or raw pre-cleaning dataset.
+notebooks/
+tests/
+data/raw/
+
+# Local-only / editor cruft
+.vscode/
+.idea/
+*.log

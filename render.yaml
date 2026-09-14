@@ -1,0 +1,45 @@
+# render.yaml
+# -----------
+# Render "Blueprint" -- lets you deploy both services in one step via
+# https://dashboard.render.com/blueprints instead of configuring each
+# service by hand. This is for Phase 19; it's included now because it
+# depends on the Dockerfiles built in this step.
+#
+# Each service builds straight from its Dockerfile using the REPO ROOT as
+# build context (dockerContext: .) -- required because Dockerfile.backend
+# needs to COPY backend/, ml/, models/, and data/processed/ as siblings.
+
+services:
+  - type: web
+    name: telecom-churn-backend
+    runtime: docker
+    dockerfilePath: ./Dockerfile.backend
+    dockerContext: .
+    plan: free
+    envVars:
+      # Set the real value in the Render dashboard after import -- never
+      # commit a real connection string here. sync: false means Render
+      # will prompt for it instead of reading a value from this file.
+      - key: MONGODB_URI
+        sync: false
+      - key: MONGODB_DB_NAME
+        value: telecom_churn
+
+  - type: web
+    name: telecom-churn-frontend
+    runtime: docker
+    dockerfilePath: ./Dockerfile.frontend
+    dockerContext: .
+    plan: free
+    envVars:
+      # Deliberately NOT using fromService+property:host here: Render's
+      # blueprint spec only exposes the BARE internal hostname that way
+      # (e.g. "telecom-churn-backend", not the full onrender.com URL), and
+      # blueprints support no string interpolation to prepend a scheme --
+      # so a value built that way would be missing "https://" and every
+      # request in frontend/app.py (f"{BACKEND_URL}/predict") would fail
+      # to resolve. Set the real value by hand after the backend's first
+      # deploy finishes and you can see its actual URL on its Render page --
+      # e.g. https://telecom-churn-backend.onrender.com (no trailing slash).
+      - key: BACKEND_URL
+        sync: false

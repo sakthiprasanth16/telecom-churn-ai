@@ -6,5 +6,6 @@ joblib
 pandas
 numpy
 pymongo
+mongomock
 python-dotenv
 langgraph

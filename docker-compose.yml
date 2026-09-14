@@ -1,0 +1,43 @@
+# docker-compose.yml
+# -------------------
+# Local-only convenience for running both services together with correct
+# networking between them. NOT used by Render -- Render builds each
+# Dockerfile as a separate service directly (see render.yaml).
+#
+# Usage:
+#   docker compose up --build
+#   Frontend: http://localhost:8501
+#   Backend:  http://localhost:8000/docs
+
+services:
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile.backend
+    image: telecom-churn-backend
+    container_name: telecom-churn-backend
+    ports:
+      - "8000:8000"
+    environment:
+      # Defaults to mongomock if unset -- see backend/database.py. Set a real
+      # MONGODB_URI here (or via a local .env file, uncommented below) to test
+      # against real Atlas locally.
+      - MONGODB_URI=${MONGODB_URI:-mongomock}
+      - MONGODB_DB_NAME=${MONGODB_DB_NAME:-telecom_churn}
+    # env_file: .env   # uncomment to load your real .env instead of the inline defaults above
+
+  frontend:
+    build:
+      context: .
+      dockerfile: Dockerfile.frontend
+    image: telecom-churn-frontend
+    container_name: telecom-churn-frontend
+    ports:
+      - "8501:8501"
+    environment:
+      # "backend" here is the other compose service's hostname on the
+      # internal docker network -- NOT localhost/127.0.0.1, which would
+      # point the frontend container at itself.
+      - BACKEND_URL=http://backend:8000
+    depends_on:
+      - backend

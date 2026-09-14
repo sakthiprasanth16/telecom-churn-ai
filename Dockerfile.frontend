@@ -1,0 +1,33 @@
+# Dockerfile.frontend
+# --------------------
+# Builds the Streamlit UI as a standalone image. This is intentionally the
+# ONLY image that needs frontend/ -- per the project's architecture, Streamlit
+# never touches the model, MongoDB, or the ml/ package directly; it only
+# makes HTTP calls to the FastAPI backend (see frontend/app.py's docstring).
+# That's what keeps this image lean and lets it scale/redeploy independently
+# of the backend.
+#
+# Build from repo root:
+#   docker build -f Dockerfile.frontend -t telecom-churn-frontend .
+#
+# Run locally (point it at a backend running on the host):
+#   docker run --rm -p 8501:8501 -e BACKEND_URL=http://host.docker.internal:8000 telecom-churn-frontend
+
+FROM python:3.11-slim
+
+WORKDIR /app
+
+COPY frontend/requirements.txt frontend/requirements.txt
+RUN pip install --no-cache-dir -r frontend/requirements.txt
+
+COPY frontend/ frontend/
+
+# BACKEND_URL must be overridden at deploy time to point at the real FastAPI
+# service URL (e.g. https://telecom-churn-backend.onrender.com) -- see
+# frontend/app.py's docstring. The localhost default only works when both
+# services run on the same machine.
+ENV BACKEND_URL=http://127.0.0.1:8000
+ENV PORT=8501
+EXPOSE 8501
+
+CMD ["sh", "-c", "streamlit run frontend/app.py --server.port=${PORT} --server.address=0.0.0.0"]
