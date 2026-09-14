@@ -1,0 +1,133 @@
+{
+  "version": "v1",
+  "model_type": "LogisticRegression",
+  "dataset_version": "dataset_v1",
+  "feature_version": "features_v1",
+  "trained_at": "2026-09-13T01:06:17.763934+00:00",
+  "training_rows": 5634,
+  "test_rows": 1409,
+  "precision": 0.5076,
+  "recall": 0.8048,
+  "f1": 0.6225,
+  "roc_auc": 0.8447,
+  "class_imbalance_handling": "class_weight='balanced'",
+  "status": "production",
+  "fairness_report": {
+    "gender": {
+      "group_sizes": {
+        "Male": 722,
+        "Female": 687
+      },
+      "selection_rate": {
+        "Male": 0.4266,
+        "Female": 0.4148
+      },
+      "recall": {
+        "Male": 0.8232,
+        "Female": 0.7876
+      },
+      "false_positive_rate": {
+        "Male": 0.2939,
+        "Female": 0.2692
+      },
+      "disparities": {
+        "selection_rate_ratio": 0.9723,
+        "recall_ratio": 0.9568,
+        "false_positive_rate_ratio": 0.916
+      },
+      "flagged": false,
+      "mitigation": {
+        "strategy": "per-group probability threshold adjustment (post-processing), targeting equal recall",
+        "target_recall": 0.8232,
+        "suggested_thresholds": {
+          "Male": 0.511,
+          "Female": 0.4506
+        },
+        "simulated_selection_rate_after_mitigation": {
+          "Male": 0.4169,
+          "Female": 0.4527
+        },
+        "simulated_selection_rate_ratio_after_mitigation": 0.9209,
+        "note": "Recommendation only -- NOT applied in the live serving path."
+      }
+    },
+    "SeniorCitizen": {
+      "group_sizes": {
+        "0": 1187,
+        "1": 222
+      },
+      "selection_rate": {
+        "0": 0.3698,
+        "1": 0.6937
+      },
+      "recall": {
+        "0": 0.7609,
+        "1": 0.9286
+      },
+      "false_positive_rate": {
+        "0": 0.2514,
+        "1": 0.5081
+      },
+      "disparities": {
+        "selection_rate_ratio": 0.5331,
+        "recall_ratio": 0.8194,
+        "false_positive_rate_ratio": 0.4948
+      },
+      "flagged": true,
+      "mitigation": {
+        "strategy": "per-group probability threshold adjustment (post-processing), targeting equal recall",
+        "target_recall": 0.9286,
+        "suggested_thresholds": {
+          "0": 0.2398,
+          "1": 0.4912
+        },
+        "simulated_selection_rate_after_mitigation": {
+          "0": 0.5695,
+          "1": 0.7072
+        },
+        "simulated_selection_rate_ratio_after_mitigation": 0.8053,
+        "note": "Recommendation only -- NOT applied in the live serving path."
+      }
+    }
+  },
+  "business_impact_inputs": {
+    "confusion_matrix": {
+      "true_positive": 301,
+      "false_positive": 292,
+      "false_negative": 73,
+      "true_negative": 743
+    },
+    "avg_monthly_revenue": 64.09
+  },
+  "features": {
+    "numeric": [
+      "tenure",
+      "MonthlyCharges",
+      "TotalCharges",
+      "avg_monthly_spend",
+      "num_services_subscribed",
+      "contract_risk_score",
+      "SeniorCitizen",
+      "is_new_customer",
+      "has_internet_and_phone"
+    ],
+    "categorical": [
+      "gender",
+      "Partner",
+      "Dependents",
+      "PhoneService",
+      "MultipleLines",
+      "InternetService",
+      "OnlineSecurity",
+      "OnlineBackup",
+      "DeviceProtection",
+      "TechSupport",
+      "StreamingTV",
+      "StreamingMovies",
+      "Contract",
+      "PaperlessBilling",
+      "PaymentMethod",
+      "tenure_bucket"
+    ]
+  }
+}
