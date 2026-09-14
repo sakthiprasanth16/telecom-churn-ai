@@ -22,6 +22,15 @@ The assignment listed 10 challenges the system must handle. Here they are, word 
 
 **Honest gap:** cleaning today is notebook-driven, run once. A real production system ingesting 10M customers' data continuously would need this promoted to an automated validation layer (e.g. Great Expectations or Pandera) that runs on every new data batch and rejects/flags bad records automatically, rather than a human running a notebook.
 
+**Feature engineering, specifically:** `ml/preprocess.py` handles missing values (`TotalCharges` imputation for brand-new customers with zero tenure) and standardizes categorical encoding consistently between training and inference. Numeric features are scaled before being fed to the model, which matters directly for Explainability (#7) below — the coefficient × value method only produces meaningful, comparable contributions across features when they're on the same scale. Outlier handling today is implicit (Logistic Regression with scaled features is naturally more robust to outliers than, say, raw distance-based models) rather than an explicit outlier-detection/capping step — a real production pipeline at scale would add explicit bounds-checking (e.g. capping `MonthlyCharges`/`tenure` at reasonable percentiles) rather than relying on the model architecture alone.
+
+### Model Development
+> *What models would you use? How would you handle class imbalance?*
+
+**Answer:** Logistic Regression, trained with `class_weight="balanced"` (see `ml/train.py`) — a deliberate choice, not a default left untouched. Churn datasets are inherently imbalanced (most customers don't churn in any given period); `class_weight="balanced"` reweights the loss function so the minority (churn) class isn't drowned out during training, rather than resampling the data itself (SMOTE or similar). This shows up directly in the model's real metrics: **recall 0.805** vs **precision 0.508** — a deliberate trade-off, since a missed churner (false negative) costs the business more than a false alarm that a rep spends a few minutes double-checking.
+
+Logistic Regression specifically (over a more complex model like XGBoost or a neural net) was chosen for three compounding reasons: it's fast enough to comfortably hit real-time inference targets (confirmed at 12.59ms in production — see [Measured Performance](#-measured-performance-the-honest-numbers)), and it gives exact, cheap explainability via its own coefficients (#7) rather than needing an approximation library like SHAP bolted on afterward.
+
 ### 2. Model Drift
 > *The model's performance degrades over time. A model trained 6 months ago performs worse than when it was first deployed. You need to detect when performance drops and take action.*
 
@@ -49,12 +58,16 @@ The assignment listed 10 challenges the system must handle. Here they are, word 
 ### 5. Automated Retraining
 > *When drift is detected, the system should automatically retrain. However, retraining must be done carefully to avoid deploying worse models.*
 
-**Answer:** `POST /retrain` runs a LangGraph-orchestrated workflow (`ml/retraining_graph.py`) with four explicit stages — `check_drift → load_training_data → train_candidate → evaluate_candidate`. It only proceeds past the first stage if PSI ≥ 0.25 *or* `force=True` is explicitly passed (useful for demoing the workflow without waiting for real drift to accumulate). Critically: **a trained candidate is never automatically promoted to production.** It's written to `models/candidate_model.pkl` and just sits there — a human must explicitly call `POST /promote-candidate` before it ever serves a real customer. That's the "carefully" the requirement asks for, implemented as a hard gate, not a policy someone has to remember to follow.
+**Answer:** `POST /retrain` runs a LangGraph-orchestrated workflow (`ml/retraining_graph.py`) with four explicit stages — `check_drift → load_training_data → train_candidate → evaluate_candidate`. It only proceeds past the first stage if PSI ≥ 0.25 *or* `force=True` is explicitly passed (useful for demoing the workflow without waiting for real drift to accumulate).
+
+**"Ensure new models are better before deploying," concretely:** the evaluation stage doesn't just train and hope — it automatically compares the candidate's **recall** and **ROC-AUC** against the current production model's, requiring both to stay within a **0.02 regression tolerance**. Fall outside that and the workflow marks the candidate `candidate_rejected` with the exact numbers in the reason string, before a human ever looks at it. A parallel fairness audit runs on the candidate too — if it flags a disparity, that's surfaced in the decision reason as a note for the human reviewer, but doesn't auto-reject by itself (an accuracy regression is unambiguous; a fairness trade-off often calls for human judgment about which mitigation to accept). Critically: even a `candidate_approved` decision **never automatically promotes to production.** It's written to `models/candidate_model.pkl` and just sits there — a human must explicitly call `POST /promote-candidate` before it ever serves a real customer. That's the "carefully" the requirement asks for, implemented as two hard gates (automated metric check, then human sign-off), not a policy someone has to remember to follow.
 
 ### 6. Versioning and Rollback
 > *You need to track all model versions, data versions, and feature versions. If a new model performs poorly, you must be able to quickly rollback to the previous version.*
 
 **Answer:** `backend/versioning.py` maintains `models/version_registry.json` as the single source of truth for which model is currently active, with full history of every version, its training metrics, and when it was promoted. `POST /rollback` reverts to any previous version and reloads the live predictor instantly — no restart needed. Concurrent-safety was a real bug found and fixed during development: promotions/rollbacks use a lock plus an atomic file write, specifically because two simultaneous admin actions on the naive first version could corrupt the registry.
+
+**Data and feature versions specifically:** each model's own metadata file (e.g. `models/model_v1_metadata.json`) carries `dataset_version` and `feature_version` fields (currently `"dataset_v1"` / `"features_v1"`), exposed through `GET /model-info`. This ties every model version back to *which* data and *which* feature-engineering logic produced it — so if `ml/preprocess.py` changes in a way that would make an old model's features incompatible, that's traceable rather than silently assumed.
 
 ### 7. Explainability
 > *Customer service representatives need to understand why the system predicts a customer will churn. You need to provide explanations that are understandable to non-technical people.*
@@ -196,7 +209,7 @@ The honest framing: **this prototype proves every required capability works corr
 | Page | What it shows |
 |---|---|
 | **Home (Prediction Form)** | Enter a customer's details, get a churn probability, a risk label, and a plain-English explanation of the top contributing factors |
-| **Monitoring** | Live system health (API/model/database status), prediction volume, average latency, drift status, fairness audit results, business-impact simulation, and full model version history |
+| **Monitoring** | System health (API/model/database status), prediction volume, average latency, drift status per feature, fairness audit results, business-impact simulation, and full model version history. **Alerting today is visual-only** — warnings surface on the dashboard (via `st.warning`/`st.error`) when someone is actually looking at it; there's no push-based alerting yet (email/Slack/PagerDuty) that would notify someone proactively. At 10M-customer scale, that's the next thing to add: piping the same drift/fairness/latency signals already computed here into a real alerting channel instead of a passive dashboard. |
 
 ---
 
@@ -333,6 +346,7 @@ telecom-churn-ai/
 - **Business impact numbers are a simulation** built on real confusion-matrix data plus configurable assumptions (30% retention success rate, $15/contact, 12-month customer lifetime) — explicitly labeled as such in the API response itself.
 - **The version registry assumes a single backend worker process.** A genuinely multi-process/multi-replica deployment needs a shared, database-backed lock instead of the current file-based one.
 - **Free-tier hosting (Render) has cold-start/spin-down behavior** — the first request after idle time is slow; this is platform behavior, not an application bug.
+- **Monitoring is dashboard-only, not proactively alerting** — drift/fairness/health warnings show up when someone opens the Monitoring page, but nothing pushes a notification (email/Slack/PagerDuty) if no one's looking.
 
 ---
 
