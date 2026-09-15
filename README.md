@@ -11,7 +11,7 @@ A complete production ML system built to answer a specific take-home interview q
 
 ## 📋 The Assignment This Solves
 
-> *"You are building a machine learning system to predict customer churn for a telecom company. The company has 10 million customers, and the system must make predictions for customer service representatives in real-time. The system must be reliable, fair, and maintainable in production."* — Xplore IT Corp
+> *"You are building a machine learning system to predict customer churn for a telecom company. The company has 10 million customers, and the system must make predictions for customer service representatives in real-time. The system must be reliable, fair, and maintainable in production."*
 
 The assignment listed 10 challenges the system must handle. Here they are, word for word, each followed by exactly how this project answers it — and where something isn't fully solved yet, that's said plainly, with a concrete plan instead of a vague excuse.
 
